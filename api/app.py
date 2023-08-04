@@ -4,7 +4,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
 from models import db, URLMapping, User, generate_short_code
 from dotenv import dotenv_values
-
+from flask_cors import CORS 
 
 app = Flask(__name__)
 shrtcut_env = dotenv_values("../.env")
@@ -16,6 +16,7 @@ app.config['SECRET_KEY'] = shrtcut_env.get('SECRET_KEY')
 login_manager = LoginManager(app)
 db.init_app(app)
 jwt = JWTManager(app)
+CORS(app)
 
 with app.app_context():
     db.create_all()
@@ -78,6 +79,45 @@ def shorten_url():
     db.session.commit()
 
     return jsonify({'short_url': f'http://{DOMAIN_NAME}/{short_code}'})
+
+@app.route('/urls/<string:short_code>', methods=['PUT'])
+@jwt_required()
+def edit_url(short_code):
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    mapping = URLMapping.query.filter_by(user_id=user.id, short_code=short_code).first()
+    if not mapping:
+        return jsonify({'error': 'URL mapping not found'}), 404
+
+    new_long_url = request.json.get('long_url')
+    if not new_long_url:
+        return jsonify({'error': 'No URL provided'}), 400
+
+    mapping.long_url = new_long_url
+    db.session.commit()
+
+    return jsonify({'message': 'URL edited successfully'})
+
+@app.route('/urls/<string:short_code>', methods=['DELETE'])
+@jwt_required()
+def delete_url(short_code):
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    mapping = URLMapping.query.filter_by(user_id=user.id, short_code=short_code).first()
+    if not mapping:
+        return jsonify({'error': 'URL mapping not found'}), 404
+
+    db.session.delete(mapping)
+    db.session.commit()
+
+    return jsonify({'message': 'URL deleted successfully'})
+
 
 @app.route('/urls', methods=['GET'])
 @jwt_required()
