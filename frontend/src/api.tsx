@@ -7,6 +7,10 @@ function handleAPIError(error: any) {
   if (error.response) {
     // The request was made, but the server responded with an error status
     console.error("API Error:", error.response.data);
+    if (error.response.status === 401 || error.response.status === 422) {
+      // Token is invalid, log out the user and clear the token
+      setInvalidToken();
+    }
     return Promise.reject(error.response.data);
   } else if (error.request) {
     // The request was made, but no response was received
@@ -28,6 +32,13 @@ export function setAuthToken(token: string | null) {
   }
 }
 
+// Function to handle invalid tokens (log out the user and clear token)
+function setInvalidToken() {
+  // Redirect to the login page on invalid token
+  window.location.replace("/login");
+  setAuthToken(null);
+}
+
 // Function to register a new user
 export function registerUser(username: string, password: string) {
   return axios
@@ -45,12 +56,20 @@ export function loginUser(username: string, password: string) {
 }
 
 // Function to log out the user
-export function logoutUser(token: string) {
-  setAuthToken(token); // Include the token in the headers
+export function logoutUser() {
   return axios
     .get(`${baseURL}/logout`)
     .then((response) => response.data)
-    .catch(handleAPIError);
+    .catch((error) => {
+      // Instead of calling handleAPIError, check for 401 response here
+      if (error.response && error.response.status === 401) {
+        // Token is invalid, log out the user and clear the token
+        setInvalidToken();
+      }
+      return Promise.reject(
+        error.response?.data || "Error occurred during logout"
+      );
+    });
 }
 
 // Function to shorten a URL
